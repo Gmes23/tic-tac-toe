@@ -11,7 +11,6 @@ import {
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Transaction } from "@mysten/sui/transactions";
-
 // Config options for the networks you want to connect to
 const { networkConfig } = createNetworkConfig({
   testnet: { url: getFullnodeUrl("testnet") },
@@ -56,14 +55,14 @@ function GameApp() {
       tx.setSender(account.address);
 
       // Set a gas budget for the transaction
-      tx.setGasBudget(50000000);
-        // console.log(account.address, 'this is account.address')
+      tx.setGasBudget(1000000);
+
       // Define the move call to create a new game on-chain
       tx.moveCall({
-        target: "0x1be6bb8e6dfd2354ea96609ce635642f9e8d419fbe6658ea116691de9bbc9009::tic_tac_toe::new",
+        target: "0x1be6bb8e6dfd2354ea96609ce635642f9e8d419fbe6658ea116691de9bbc9009::tic_tac_toe::shared::new",
         arguments: [
-          tx.pure.address('0x9969f857b6751ff4dde4ad7d28b53b2f4250696b9d911fa44e00ce46d7a05a23') ,  // Player X address
-          tx.pure.address('0x9969f857b6751ff4dde4ad7d28b53b2f4250696b9d911fa44e00ce46d7a05a23') ,  // Player O address (for testing purposes, using the same address)
+          tx.pure.address(account.address),  // Serialize Player X address
+          tx.pure.address(account.address),  // Serialize Player O address (for testing purposes, using the same address)
         ],
       });
 
