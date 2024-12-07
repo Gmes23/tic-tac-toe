@@ -3,19 +3,21 @@
 This tutorial demonstrates how to use the React frontend application to interact with the Tic Tac Toe game deployed on the Sui blockchain. Players can connect wallets, create games, join existing games using an object ID, and play the game to completion.
 A working version of this project can be found at [vercel] (https://tic-tac-toe-omega-dun.vercel.app/)
 
-#### Prerequisites
+#### Features
+- Blockchain-Powered Gameplay: Game logic is executed through a Sui Move smart contract.
+- Wallet Integration: Connect your wallet to create or join games.
+- Multiplayer: Play against another wallet-addressed player.
+- Game State Sync: Automatic updates of game state between players using polling.
+- Decentralized NFT Rewards: The winner receives an on-chain trophy NFT.
+
+#### Setup Instructions
+
+##### Prerequisites
 - **Sui CLI Installed**: Ensure you have the Sui CLI installed and the Sui fullnode running locally or on testnet.
 - **Node.js Installed**: Ensure you have Node.js (version 16+) and npm installed for React development.
 - **Git Installed**: Required to clone the project repository.
 
-#### Features
-- Connect wallets and interact with the Sui blockchain.
-- Start a new Tic Tac Toe game as Player 1.
-- Join an existing game as Player 2 using the game object ID.
-- Display the game state dynamically from the blockchain.
-- Display the winner and stop the game once a trophy is minted.
-
-### Setup Instructions
+##### Getting Started
 1. Clone the Project Repository
 ` git clone https://github.com/your-repo/tic-tac-toe.git` 
 2. cd tic-tac-toe/front
@@ -25,12 +27,12 @@ Install Dependencies
 ` npm start ` 
 The app will be available at http://localhost:3000.
 
-### Step-by-Step Guide
+#### Step-by-Step Guide
 1. Connect Wallet
 Click the Connect Wallet button.
 The app will connect to the first available wallet and display the connected wallet address.
 2. Start a New Game (Player 1)
-Click Start New Game to initialize a new game on the blockchain.
+`Player 1` places the adress of `Player 2` in the input field and clicks Start New Game to initialize a new game on the blockchain.
 The game object ID will be displayed. Share this ID with Player 2.
 3. Join a Game (Player 2)
 Enter the game object ID in the input field and click Join Game.
@@ -48,7 +50,6 @@ Handles wallet connection, game creation, joining, and moves.
 Displays the game board dynamically based on blockchain state.
 
 Game Creation:
-
 Key Functions
 
 1. Connect Wallet
