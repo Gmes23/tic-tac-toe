@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   createNetworkConfig, 
   SuiClientProvider, 
@@ -223,9 +223,48 @@ function GameApp() {
     return Winner.None;
   };
 
+  // Memoized function to fetch the game state and update React state
+  const fetchGameState = useCallback(async () => {
+    if (!createdObjectId) return;
+
+    try {
+      const gameState = await client.getObject({ id: createdObjectId, options: { showContent: true } });
+      if (gameState) {
+        const boardData = gameState.data.content.fields.board;
+        const formattedBoard = Array(3)
+          .fill(null)
+          .map((_, rowIndex) =>
+            boardData.slice(rowIndex * 3, rowIndex * 3 + 3).map((cell) => {
+              if (cell === 1) return "X";
+              if (cell === 2) return "O";
+              return null;
+            })
+          );
+
+        // Only update the board if it has changed
+        if (JSON.stringify(formattedBoard) !== JSON.stringify(gameBoard)) {
+          setGameBoard(formattedBoard);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch game state:", e);
+    }
+  }, [createdObjectId, gameBoard]);
+
+  // Set up polling for game state updates
+  useEffect(() => {
+    if (createdObjectId) {
+      const interval = setInterval(() => {
+        fetchGameState();
+      }, 3000); // Poll every 3 seconds
+
+      // Clear interval when component unmounts or game ID changes
+      return () => clearInterval(interval);
+    }
+  }, [createdObjectId, fetchGameState]);
+
   // Function to join an existing game
   const joinExistingGame = async (gameObjectId) => {
-    console.log("Game Object ID type of", typeof gameObjectId); // Log the 
     console.log("Game Object ID Entered:", gameObjectId); // Log the input
     if (!account) {
       console.error("No account connected");
@@ -233,10 +272,23 @@ function GameApp() {
     }
     try {
       // Fetch the game state from the blockchain using the game object ID
-      const gameState = await client.getObject({ id: gameObjectId });
+      const gameState = await client.getObject({ id: gameObjectId, options: { showContent: true }});
       if (gameState) {
+        console.log("this is gameState", gameState);
+
+        const boardData = gameState.data.content.fields.board;
+        const formattedBoard = Array(3)
+          .fill(null)
+          .map((_, rowIndex) =>
+            boardData.slice(rowIndex * 3, rowIndex * 3 + 3).map((cell) => {
+              if (cell === 1) return "X";
+              if (cell === 2) return "O";
+              return null;
+            })
+          );
+
         setCreatedObjectId(gameObjectId);
-        setGameBoard(gameState.data.board);
+        setGameBoard(formattedBoard);
         setTrophy(Winner.None);
         console.log("Joined Game Object ID:", gameObjectId);
       } else {
@@ -330,6 +382,8 @@ function App() {
 }
 
 export default App;
+
+
 
 
 
