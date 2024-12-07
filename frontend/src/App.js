@@ -280,6 +280,7 @@ function GameApp() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      
       <h1 className="text-4xl font-bold text-blue-600 fixed top-4" style={{ position: "absolute", top: "25vh" }}>Tic Tac Toe</h1>
       {!isConnected ? (
         <button
@@ -290,18 +291,19 @@ function GameApp() {
         </button>
       ) : (
         <div className="text-center">
-          <p className="mb-4">Wallet Connected: {account?.address}</p>
+          <p className="mb-4 font-bold tracking-tight text-black-900">Wallet Connected: {account?.address}</p>
           <input
             type="text"
             placeholder="Enter Player Two's Wallet Address"
             value={playerTwoAddress}
             onChange={(e) => setPlayerTwoAddress(e.target.value)}
-            className="border border-gray-300 px-4 py-2 mb-4"
+            className="border border-gray-300 px-4 py-2 mb-4 text-black font-bold"
           />
           <button
             onClick={startNewGame}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
             disabled={!playerTwoAddress} // Disable button if Player Two's address is not entered
+            style={{ marginLeft: "8px" }}
           >
             Start New Game
           </button>
@@ -311,7 +313,7 @@ function GameApp() {
               placeholder="Enter Game Object ID to join"
               value={joinGameObjectId}
               onChange={(e) => setJoinGameObjectId(e.target.value)}
-              className="border border-gray-300 px-4 py-2 mr-2"
+              className="border border-gray-300 px-4 py-2 mr-2 text-black font-bold"
             />
             <button
               onClick={() => joinExistingGame(joinGameObjectId)}
@@ -320,7 +322,7 @@ function GameApp() {
               Join Game
             </button>
           </div>
-          {createdObjectId && <p>Created Game Object ID: {createdObjectId}</p>}
+          {createdObjectId && <p className="font-bold tracking-tight text-gray-900">Created Game Object ID: {createdObjectId}</p>}
           {createdObjectId && (
             <div>
               <h3 className="font-bold text-lg mb-4">Game Board</h3>
@@ -330,8 +332,8 @@ function GameApp() {
                     <button
                       key={colIndex}
                       onClick={() => makeMove(rowIndex, colIndex)}
-                      className={`w-12 h-12 m-1 border border-gray-300 ${
-                        cell === "X" ? "text-blue-600" : "text-red-600"
+                      className={`w-16 h-16 m-1 border border-gray-300 ${
+                        cell === "X" ? "text-blue-600" : "text-black-600"
                       } font-bold`}
                       disabled={cell !== null || trophy !== Winner.None}
                     >
@@ -342,7 +344,7 @@ function GameApp() {
               ))}
               {trophy !== Winner.None && (
                 <div className="mt-4">
-                  <h4 className="text-lg font-bold">
+                  <h4 className="text-lg font-bold tracking-tight text-black-900">
                     Winner is: {trophy === Winner.You ? "You" : "Opponent"}
                   </h4>
                   <p>Winning Player Address: {account?.address}</p>

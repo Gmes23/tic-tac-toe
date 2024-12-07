@@ -77,7 +77,7 @@ const startNewGame = async () => {
 };
 ```
 Initializes a new game on the blockchain. Creates a new transaction (tx) and sets the required parameters.
-By calling the shared::new function in the smart contract we begin to create a game object.
+By calling the `shared::new` function in the smart contract we create a game object.
 It uses the connected wallet's address (account.address) for Player X and Player O during testing.
 Signs and executes the transaction to create the game, returning a unique objectId for the game.
 2. Start New Game
@@ -85,12 +85,18 @@ Signs and executes the transaction to create the game, returning a unique object
 
 3. Join Existing Game
 ```javascript
-Copy code
 const joinExistingGame = async (gameObjectId) => {
-  const gameState = await client.getObject({ id: gameObjectId });
-  setCreatedObjectId(gameObjectId);
-  setGameBoard(gameState.data.board);
-};
+    try {
+      const gameState = await client.getObject({
+        id: gameObjectId,
+        options: { showContent: true },
+      });
+      if (gameState) {
+        // The gameState object contains metadata and the content of the game object from theblockchain.
+        // The content includes fields such as the board state, the turn, and the players' addresses.
+        // All this is derived from the objectId; object IDs on Sui are unique, similar to addresses
+        const boardData = gameState.data.content.fields.board;
+    ......
 ```
 `joinExistingGame` Allows Player 2 to join an existing game by entering the gameObjectId created by Player 1.
 This Fetches the game state from the blockchain using the entered gameObjectId.
