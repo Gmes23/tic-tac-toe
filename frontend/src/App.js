@@ -43,6 +43,7 @@ function GameApp() {
   const [gameBoard, setGameBoard] = useState(Array(3).fill(Array(3).fill(null)));
   const [currentTurn, setCurrentTurn] = useState("X");
   const [trophy, setTrophy] = useState(Winner.None);
+  const [joinGameObjectId, setJoinGameObjectId] = useState("");
 
   // Function to connect the wallet
   const connectWallet = () => {
@@ -222,25 +223,76 @@ function GameApp() {
     return Winner.None;
   };
 
+  // Function to join an existing game
+  const joinExistingGame = async (gameObjectId) => {
+    console.log("Game Object ID type of", typeof gameObjectId); // Log the 
+    console.log("Game Object ID Entered:", gameObjectId); // Log the input
+    if (!account) {
+      console.error("No account connected");
+      return;
+    }
+    try {
+      // Fetch the game state from the blockchain using the game object ID
+      const gameState = await client.getObject({ id: gameObjectId });
+      if (gameState) {
+        setCreatedObjectId(gameObjectId);
+        setGameBoard(gameState.data.board);
+        setTrophy(Winner.None);
+        console.log("Joined Game Object ID:", gameObjectId);
+      } else {
+        console.error("Invalid Game Object ID");
+      }
+    } catch (e) {
+      console.error("Failed to join game:", e);
+    }
+  };
+
   return (
-    <div className="App">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       {!isConnected ? (
-        <button onClick={connectWallet}>Connect Wallet</button>
+        <button
+          onClick={connectWallet}
+          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Connect Wallet
+        </button>
       ) : (
-        <div>
-          <p>Wallet Connected: {account?.address}</p>
-          <button onClick={startNewGame}>Start New Game</button>
+        <div className="text-center">
+          <p className="mb-4">Wallet Connected: {account?.address}</p>
+          <button
+            onClick={startNewGame}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
+          >
+            Start New Game
+          </button>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Enter Game Object ID to join"
+              value={joinGameObjectId}
+              onChange={(e) => setJoinGameObjectId(e.target.value)}
+              className="border border-gray-300 px-4 py-2 mr-2"
+            />
+            <button
+              onClick={() => joinExistingGame(joinGameObjectId)}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Join Game
+            </button>
+          </div>
           {createdObjectId && <p>Created Game Object ID: {createdObjectId}</p>}
           {createdObjectId && (
             <div>
-              <h3>Game Board</h3>
+              <h3 className="font-bold text-lg mb-4">Game Board</h3>
               {gameBoard.map((row, rowIndex) => (
-                <div key={rowIndex} style={{ display: "flex" }}>
+                <div key={rowIndex} className="flex justify-center">
                   {row.map((cell, colIndex) => (
                     <button
                       key={colIndex}
                       onClick={() => makeMove(rowIndex, colIndex)}
-                      style={{ width: "50px", height: "50px", margin: "5px" }}
+                      className={`w-12 h-12 m-1 border border-gray-300 ${
+                        cell === "X" ? "text-blue-600" : "text-red-600"
+                      } font-bold`}
                       disabled={cell !== null || trophy !== Winner.None}
                     >
                       {cell}
@@ -249,8 +301,10 @@ function GameApp() {
                 </div>
               ))}
               {trophy !== Winner.None && (
-                <div>
-                  <h4>Winner is: {trophy === Winner.You ? "You" : "Opponent"}</h4>
+                <div className="mt-4">
+                  <h4 className="text-lg font-bold">
+                    Winner is: {trophy === Winner.You ? "You" : "Opponent"}
+                  </h4>
                   <p>Winning Player Address: {account?.address}</p>
                 </div>
               )}
@@ -275,6 +329,10 @@ function App() {
 }
 
 export default App;
+
+
+
+
 
 
 
