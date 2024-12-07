@@ -76,11 +76,11 @@ const startNewGame = async () => {
   signAndExecuteTransaction({ transaction: tx });
 };
 ```
+2. Start New Game
 Initializes a new game on the blockchain. Creates a new transaction (tx) and sets the required parameters.
 By calling the `shared::new` function in the smart contract we create a game object.
-It uses the connected wallet's address (account.address) for Player X and Player O during testing.
-Signs and executes the transaction to create the game, returning a unique objectId for the game.
-2. Start New Game
+It uses the connected wallet's address `(account.address)` for Player X and Player O during testing.
+Signs and executes the transaction to create the game, returning a unique `objectId` for the game.
 
 
 3. Join Existing Game
