@@ -46,7 +46,6 @@ The app ensures that only the correct player can make a move during their turn.
 Once a player wins, a trophy object will be created signify there is a winner and the game will stop. The winner's information will be displayed.
 
 ### Design Document
-#### Frontend Components
 GameApp:
 
 Handles wallet connection, game creation, joining, and moves.
@@ -64,8 +63,12 @@ const connectWallet = () => {
   }
 };
 ```
+This function connects the user's wallet to the application.
+It checks if wallets are available (wallets.length > 0).
+Uses the connect method provided by the wallet library to establish a connection.
+If connection is successful, it updates the state variable isConnected to true.
+Allowing the user to interact with the game once their wallet is connected.
 
-2. Start New Game
 ```javascript
 const startNewGame = async () => {
   const tx = new Transaction();
@@ -76,6 +79,12 @@ const startNewGame = async () => {
   signAndExecuteTransaction({ transaction: tx });
 };
 ```
+Initializes a new game on the blockchain. Creates a new transaction (tx) and sets the required parameters.
+By calling the shared::new function in the smart contract we begin to create a game object.
+It uses the connected wallet's address (account.address) for Player X and Player O during testing.
+Signs and executes the transaction to create the game, returning a unique objectId for the game.
+2. Start New Game
+
 
 3. Join Existing Game
 ```javascript
@@ -86,6 +95,10 @@ const joinExistingGame = async (gameObjectId) => {
   setGameBoard(gameState.data.board);
 };
 ```
+`joinExistingGame` Allows Player 2 to join an existing game by entering the gameObjectId created by Player 1.
+This Fetches the game state from the blockchain using the entered gameObjectId.
+Updates the local state with the game board (setGameBoard) and the game object ID (setCreatedObjectId).
+Finally it enables Player 2 to make moves based on the existing game
 
 4. Make a Move
 ```javascript
@@ -99,9 +112,41 @@ const makeMove = async (row, col) => {
   signAndExecuteTransaction({ transaction: tx });
 };
 ```
+`makeMove` Allows a player to make a move on the game board.
+Creates a transaction to call the `shared::place_mark` function in the smart contract.
+Uses the row and col parameters to specify the cell where the mark should be placed.
+It then executes the transaction and updates the local game board state.
+Toggles the turn between Player X and Player O.
+Finally it ensures no moves are allowed after a winner is determined or if the game ends in a draw.
+
+
+5. Determine Winner
+```javascript
+const determineWinner = (transaction) => {
+  const effects = transaction.effects;
+  if (effects?.created?.some((obj) => obj.reference.objectId)) {
+    return Winner.You; // Assuming the current user won if a trophy was created
+  }
+  return Winner.None;
+};
+```
+This function determines if a player has won the game by checking if a trophy object was created in the transaction effects.
+If a trophy is created, it returns `Winner.You` indicating the current player has won.
+Otherwise, it returns `Winner.None` indicating the game is still in progress or has ended in a draw.
+The function is called after every move to update the game's state and display the winner.
 
 
 ### Deployment to Vercel
 Run npm run build to generate a production build.
 Deploy the build folder to Vercel via the Vercel CLI or web interface.
 By following these instructions, you can set up, play, and extend the Tic Tac Toe game on the Sui blockchain with React
+
+### Resources
+To learn more about the technologies used in this project, check out the following resources:
+
+
+- **[Sui-getting-started](https://docs.sui.io/guides/developer/getting-started/sui-install)**
+- **[Sui-first-app](https://docs.sui.io/guides/developer/first-app)**
+- **[Sui-tic-tac-toe](https://docs.sui.io/guides/developer/app-examples/tic-tac-toe)**
+- **[Move-book](https://move-book.com/)**
+- **[React](https://react.dev/learn)**
