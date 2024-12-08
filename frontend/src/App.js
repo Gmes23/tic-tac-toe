@@ -44,7 +44,7 @@ function GameApp() {
   const [currentTurn, setCurrentTurn] = useState("X");
   const [trophy, setTrophy] = useState(Winner.None);
   const [joinGameObjectId, setJoinGameObjectId] = useState("");
-  const [playerTwoAddress, setPlayerTwoAddress] = useState("");
+  const [winnerAddress, setWinnerAddress] = useState(null);
 
   // Function to connect the wallet
   const connectWallet = () => {
@@ -96,6 +96,7 @@ function GameApp() {
     if (createdObjectId) {
       const interval = setInterval(() => {
         fetchGameState();
+        fetchWinner(); // Fetch winner during polling
       }, 3000); // Poll every 3 seconds
 
       // Clear interval when component unmounts or game ID changes
@@ -105,8 +106,8 @@ function GameApp() {
 
   // Function to create a new game on-chain
   const startNewGame = async () => {
-    if (!account || !playerTwoAddress) {
-      console.error("No account connected or Player Two address not provided");
+    if (!account) {
+      console.error("No account connected");
       return;
     }
     try {
@@ -121,11 +122,8 @@ function GameApp() {
 
       // Define the move call to create a new game on-chain
       tx.moveCall({
-        target: "0x1be6bb8e6dfd2354ea96609ce635642f9e8d419fbe6658ea116691de9bbc9009::shared::new",
-        arguments: [
-          tx.pure.address(account.address),  // Serialize Player X address
-          tx.pure.address(playerTwoAddress), // Serialize Player O address
-        ],
+        target: "0x5ce0d3f6c47603d289af8b07144a302b1c058cf625926ecc0a05fbb1d48f520a::game::create_game",
+        arguments: [],
       });
 
       // Sign and execute the transaction
@@ -182,32 +180,37 @@ function GameApp() {
       return;
     }
     try {
-      const gameState = await client.getObject({
-        id: gameObjectId,
-        options: { showContent: true },
-      });
-      if (gameState) {
-        console.log("this is gameState", gameState);
-        const boardData = gameState.data.content.fields.board;
-        const formattedBoard = Array(3)
-          .fill(null)
-          .map((_, rowIndex) =>
-            boardData.slice(rowIndex * 3, rowIndex * 3 + 3).map((cell) => {
-              if (cell === 1) return "X";
-              if (cell === 2) return "O";
-              return null;
-            })
-          );
+      const tx = new Transaction();
+      tx.setSender(account.address);
+      tx.setGasBudget(10000000);
 
-        setCreatedObjectId(gameObjectId);
-        setGameBoard(formattedBoard);
-        setTrophy(Winner.None);
-        console.log("Joined Game Object ID:", gameObjectId);
-      } else {
-        console.error("Invalid Game Object ID");
-      }
-    } catch (e) {
-      console.error("Failed to join game:", e);
+      tx.moveCall({
+        target: "0x5ce0d3f6c47603d289af8b07144a302b1c058cf625926ecc0a05fbb1d48f520a::game::join_game",
+        arguments: [tx.object(gameObjectId)],
+      });
+
+      signAndExecuteTransaction(
+        {
+          transaction: tx,
+          requestType: "WaitForLocalExecution",
+          options: {
+            showEffects: true,
+            showEvents: true,
+            showObjectChanges: true,
+          },
+        },
+        {
+          onSuccess: () => {
+            setCreatedObjectId(gameObjectId);
+            console.log("Joined Game Object ID:", gameObjectId);
+          },
+          onError: (error) => {
+            console.error("Failed to join game: ", error);
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Failed to create a transaction: ", error);
     }
   };
 
@@ -227,11 +230,10 @@ function GameApp() {
 
       tx.moveCall({
         target:
-          "0x1be6bb8e6dfd2354ea96609ce635642f9e8d419fbe6658ea116691de9bbc9009::shared::place_mark",
+          "0x5ce0d3f6c47603d289af8b07144a302b1c058cf625926ecc0a05fbb1d48f520a::game::make_move",
         arguments: [
           tx.object(createdObjectId), // The game object ID
-          tx.pure.u8(row), // The row to place the mark
-          tx.pure.u8(col), // The column to place the mark
+          tx.pure.u8(row * 3 + col), // The board position to place the mark
         ],
       });
 
@@ -278,6 +280,33 @@ function GameApp() {
     }
   };
 
+  // Function to fetch the game winner
+  const fetchWinner = useCallback(async () => {
+    if (!createdObjectId) return;
+
+    try {
+      const gameState = await client.getObject({ id: createdObjectId, options: { showContent: true } });
+      console.log(gameState, 'this is gameState')
+      if (gameState) {
+        const status = gameState.data.content.fields.status;
+        const playerX = gameState.data.content.fields.player_x;
+        const playerO = gameState.data.content.fields.player_o;
+
+        if (status === 1) {
+          setTrophy(Winner.X);
+          setWinnerAddress(playerX);
+        } else if (status === 2) {
+          setTrophy(Winner.O);
+          setWinnerAddress(playerO);
+        } else if (status === 3) {
+          setTrophy(Winner.Draw);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch game winner:", e);
+    }
+  }, [createdObjectId]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       
@@ -292,18 +321,9 @@ function GameApp() {
       ) : (
         <div className="text-center">
           <p className="mb-4 font-bold tracking-tight text-black-900">Wallet Connected: {account?.address}</p>
-          <input
-            type="text"
-            placeholder="Enter Player Two's Wallet Address"
-            value={playerTwoAddress}
-            onChange={(e) => setPlayerTwoAddress(e.target.value)}
-            className="border border-gray-300 px-4 py-2 mb-4 text-black font-bold"
-          />
           <button
             onClick={startNewGame}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
-            disabled={!playerTwoAddress} // Disable button if Player Two's address is not entered
-            style={{ marginLeft: "8px" }}
           >
             Start New Game
           </button>
@@ -345,9 +365,9 @@ function GameApp() {
               {trophy !== Winner.None && (
                 <div className="mt-4">
                   <h4 className="text-lg font-bold tracking-tight text-black-900">
-                    Winner is: {trophy === Winner.You ? "You" : "Opponent"}
+                    Winner is: {trophy === Winner.Draw ? "Draw" : winnerAddress === account?.address ? "You" : "Opponent"}
                   </h4>
-                  <p>Winning Player Address: {account?.address}</p>
+                  {trophy !== Winner.Draw && <p className="font-bold text-black-900">Winning Player Address: {winnerAddress}</p>}
                 </div>
               )}
             </div>
@@ -371,3 +391,5 @@ function App() {
 }
 
 export default App;
+
+

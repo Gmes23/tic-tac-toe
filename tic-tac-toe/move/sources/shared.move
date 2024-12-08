@@ -1,223 +1,189 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+module tic_tac_toe::game {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+    use std::vector;
+    use sui::event;
+    use sui::object::ID;
 
-/// An implementation of Tic Tac Toe, using shared objects.
-///
-/// The `Game` object is shared so both players can mutate it, and
-/// contains authorization logic to only accept a move from the
-/// correct player.
-///
-/// The `owned` module shows a variant of this game implemented using
-/// only fast path transactions, which should be cheaper and lower
-/// latency, but either requires a centralized service or a multi-sig
-/// set-up to own the game.
-module tic_tac_toe::shared;
+    // Error constants
+    const INVALID_MOVE: u64 = 0;
+    const NOT_YOUR_TURN: u64 = 1;
+    const GAME_OVER: u64 = 2;
+    const INVALID_POSITION: u64 = 3;
+    const POSITION_TAKEN: u64 = 4;
+    const PLAYER_ALREADY_JOINED: u64 = 5;
+    const GAME_NOT_STARTED: u64 = 6;
 
-/// The state of an active game of tic-tac-toe.
-public struct Game has key {
-    id: UID,
-    /// Marks on the board.
-    board: vector<u8>,
-    /// The next turn to be played.
-    turn: u8,
-    /// The address expected to send moves on behalf of X.
-    x: address,
-    /// The address expected to send moves on behalf of O.
-    o: address,
-}
+    // Game status
+    const IN_PROGRESS: u8 = 0;
+    const X_WON: u8 = 1;
+    const O_WON: u8 = 2;
+    const DRAW: u8 = 3;
 
-/// An NFT representing a finished game. Sent to the winning player if there
-/// is one, or to both players in the case of a draw.
-public struct Trophy has key {
-    id: UID,
-    /// Whether the game was won or drawn.
-    status: u8,
-    /// The state of the board at the end of the game.
-    board: vector<u8>,
-    /// The number of turns played
-    turn: u8,
-    /// The other player (relative to the player who owns this Trophy).
-    other: address,
-}
-
-// === Constants ===
-
-// Marks
-const MARK__: u8 = 0;
-const MARK_X: u8 = 1;
-const MARK_O: u8 = 2;
-
-// Trophy status
-const TROPHY_NONE: u8 = 0;
-const TROPHY_DRAW: u8 = 1;
-const TROPHY_WIN: u8 = 2;
-
-// === Errors ===
-
-#[error]
-const EInvalidLocation: vector<u8> = b"Move was for a position that doesn't exist on the board.";
-
-#[error]
-const EWrongPlayer: vector<u8> = b"Game expected a move from another player";
-
-#[error]
-const EAlreadyFilled: vector<u8> = b"Attempted to place a mark on a filled slot.";
-
-#[error]
-const ENotFinished: vector<u8> = b"Game has not reached an end condition.";
-
-#[error]
-const EAlreadyFinished: vector<u8> = b"Can't place a mark on a finished game.";
-
-#[error]
-const EInvalidEndState: vector<u8> = b"Game reached an end state that wasn't expected.";
-
-// === Public Functions ===
-
-/// Create a new game, played by `x` and `o`. This function should be called
-/// by the address responsible for administrating the game.
-public fun new(x: address, o: address, ctx: &mut TxContext) {
-    transfer::share_object(Game {
-        id: object::new(ctx),
-        board: vector[MARK__, MARK__, MARK__, MARK__, MARK__, MARK__, MARK__, MARK__, MARK__],
-        turn: 0,
-        x,
-        o,
-    });
-}
-
-/// Called by the next player to add a new mark.
-public fun place_mark(game: &mut Game, row: u8, col: u8, ctx: &mut TxContext) {
-    assert!(game.ended() == TROPHY_NONE, EAlreadyFinished);
-    assert!(row < 3 && col < 3, EInvalidLocation);
-
-    // Confirm that the mark is from the player we expect.
-    let (me, them, sentinel) = game.next_player();
-    assert!(me == ctx.sender(), EWrongPlayer);
-
-    if (game[row, col] != MARK__) {
-        abort EAlreadyFilled
-    };
-
-    *(&mut game[row, col]) = sentinel;
-    game.turn = game.turn + 1;
-
-    // Check win condition -- if there is a winner, send them the trophy.
-    let end = game.ended();
-    if (end == TROPHY_WIN) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-    } else if (end == TROPHY_DRAW) {
-        transfer::transfer(game.mint_trophy(end, them, ctx), me);
-        transfer::transfer(game.mint_trophy(end, me, ctx), them);
-    } else if (end != TROPHY_NONE) {
-        abort EInvalidEndState
+    public struct Game has key {
+        id: UID,
+        board: vector<u8>,
+        player_x: address,
+        player_o: address,
+        current_turn: address,
+        status: u8,
     }
-}
 
-// === Private Helpers ===
-
-/// Address of the player the move is expected from, the address of the
-/// other player, and the mark to use for the upcoming move.
-fun next_player(game: &Game): (address, address, u8) {
-    if (game.turn % 2 == 0) {
-        (game.x, game.o, MARK_X)
-    } else {
-        (game.o, game.x, MARK_O)
+    public struct GameResult has copy, drop {
+        game_id: ID,
+        winner: address,
+        status: u8
     }
-}
 
-/// Test whether the values at the triple of positions all match each other
-/// (and are not all EMPTY).
-fun test_triple(game: &Game, x: u8, y: u8, z: u8): bool {
-    let x = game.board[x as u64];
-    let y = game.board[y as u64];
-    let z = game.board[z as u64];
-
-    MARK__ != x && x == y && y == z
-}
-
-/// Create a trophy from the current state of the `game`, that indicates
-/// that a player won or drew against `other` player.
-fun mint_trophy(game: &Game, status: u8, other: address, ctx: &mut TxContext): Trophy {
-    Trophy {
-        id: object::new(ctx),
-        status,
-        board: game.board,
-        turn: game.turn,
-        other,
+    // === Events ===
+    public struct GameCreated has copy, drop {
+        game_id: ID,
+        player_x: address
     }
-}
 
-public fun burn(game: Game) {
-    assert!(game.ended() != TROPHY_NONE, ENotFinished);
-    let Game { id, .. } = game;
-    id.delete();
-}
-
-/// Test whether the game has reached an end condition or not.
-public fun ended(game: &Game): u8 {
-    if (// Test rows
-        test_triple(game, 0, 1, 2) ||
-            test_triple(game, 3, 4, 5) ||
-            test_triple(game, 6, 7, 8) ||
-            // Test columns
-            test_triple(game, 0, 3, 6) ||
-            test_triple(game, 1, 4, 7) ||
-            test_triple(game, 2, 5, 8) ||
-            // Test diagonals
-            test_triple(game, 0, 4, 8) ||
-            test_triple(game, 2, 4, 6)) {
-        TROPHY_WIN
-    } else if (game.turn == 9) {
-        TROPHY_DRAW
-    } else {
-        TROPHY_NONE
+    public struct PlayerJoined has copy, drop {
+        game_id: ID,
+        player_o: address
     }
-}
 
-#[syntax(index)]
-public fun mark(game: &Game, row: u8, col: u8): &u8 {
-    &game.board[(row * 3 + col) as u64]
-}
+    public struct MoveMade has copy, drop {
+        game_id: ID,
+        player: address,
+        position: u8
+    }
 
-#[syntax(index)]
-fun mark_mut(game: &mut Game, row: u8, col: u8): &mut u8 {
-    &mut game.board[(row * 3 + col) as u64]
-}
+    // === Public functions ===
 
-// === Test Helpers ===
-#[test_only]
-public use fun game_board as Game.board;
-#[test_only]
-public use fun trophy_status as Trophy.status;
-#[test_only]
-public use fun trophy_board as Trophy.board;
-#[test_only]
-public use fun trophy_turn as Trophy.turn;
-#[test_only]
-public use fun trophy_other as Trophy.other;
+    public fun create_game(ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+        let game = Game {
+            id: object::new(ctx),
+            board: vector[0,0,0,0,0,0,0,0,0],
+            player_x: sender,
+            player_o: @0x0,
+            current_turn: sender,
+            status: IN_PROGRESS,
+        };
 
-#[test_only]
-public fun game_board(game: &Game): vector<u8> {
-    game.board
-}
+        event::emit(GameCreated {
+            game_id: object::uid_to_inner(&game.id),
+            player_x: sender
+        });
 
-#[test_only]
-public fun trophy_status(trophy: &Trophy): u8 {
-    trophy.status
-}
+        transfer::share_object(game);
+    }
 
-#[test_only]
-public fun trophy_board(trophy: &Trophy): vector<u8> {
-    trophy.board
-}
+    public fun join_game(game: &mut Game, ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+        assert!(game.player_o == @0x0, PLAYER_ALREADY_JOINED);
+        assert!(sender != game.player_x, PLAYER_ALREADY_JOINED);
+        
+        game.player_o = sender;
 
-#[test_only]
-public fun trophy_turn(trophy: &Trophy): u8 {
-    trophy.turn
-}
+        event::emit(PlayerJoined {
+            game_id: object::uid_to_inner(&game.id),
+            player_o: sender
+        });
+    }
 
-#[test_only]
-public fun trophy_other(trophy: &Trophy): address {
-    trophy.other
+    public fun make_move(game: &mut Game, position: u8, ctx: &mut TxContext) {
+        let sender = tx_context::sender(ctx);
+        
+        // Validations
+        assert!(game.player_o != @0x0, GAME_NOT_STARTED);
+        assert!(game.status == IN_PROGRESS, GAME_OVER);
+        assert!(sender == game.current_turn, NOT_YOUR_TURN);
+        assert!(position < 9, INVALID_POSITION);
+        assert!(*vector::borrow(&game.board, (position as u64)) == 0, POSITION_TAKEN);
+
+        // Make move
+        let mark = if (sender == game.player_x) { 1 } else { 2 };
+        *vector::borrow_mut(&mut game.board, (position as u64)) = mark;
+
+        event::emit(MoveMade {
+            game_id: object::uid_to_inner(&game.id),
+            player: sender,
+            position
+        });
+
+        // Update turn
+        game.current_turn = if (sender == game.player_x) { 
+            game.player_o 
+        } else { 
+            game.player_x 
+        };
+
+        // Check game status
+        check_game_status(game);
+    }
+
+    public fun get_game_status(game: &Game): u8 {
+        game.status
+    }
+
+    public fun get_winner(game: &Game): address {
+        assert!(game.status == X_WON || game.status == O_WON, GAME_NOT_STARTED);
+        if (game.status == X_WON) {
+            game.player_x
+        } else {
+            game.player_o
+        }
+    }
+
+    // === Private functions ===
+
+    fun check_game_status(game: &mut Game) {
+        // Check rows
+        check_line(game, 0, 1, 2);
+        check_line(game, 3, 4, 5);
+        check_line(game, 6, 7, 8);
+
+        // Check columns
+        check_line(game, 0, 3, 6);
+        check_line(game, 1, 4, 7);
+        check_line(game, 2, 5, 8);
+
+        // Check diagonals
+        check_line(game, 0, 4, 8);
+        check_line(game, 2, 4, 6);
+
+        // Check draw
+        if (game.status == IN_PROGRESS) {
+            let mut is_full = true;
+            let mut i = 0;
+            while (i < 9) {
+                if (*vector::borrow(&game.board, i) == 0) {
+                    is_full = false;
+                    break
+                };
+                i = i + 1;
+            };
+            if (is_full) {
+                game.status = DRAW;
+                event::emit(GameResult {
+                    game_id: object::uid_to_inner(&game.id),
+                    winner: @0x0,
+                    status: DRAW
+                });
+            };
+        };
+    }
+
+    fun check_line(game: &mut Game, a: u64, b: u64, c: u64) {
+        let board = &game.board;
+        let val_a = *vector::borrow(board, a);
+        if (val_a != 0) {
+            let val_b = *vector::borrow(board, b);
+            let val_c = *vector::borrow(board, c);
+            if (val_a == val_b && val_b == val_c) {
+                game.status = if (val_a == 1) { X_WON } else { O_WON };
+                event::emit(GameResult {
+                    game_id: object::uid_to_inner(&game.id),
+                    winner: if (val_a == 1) { game.player_x } else { game.player_o },
+                    status: game.status
+                });
+            }
+        }
+    }
 }
